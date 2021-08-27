@@ -15,6 +15,8 @@ import "ABDKMathQuad.sol";
 
   mapping(address => IERC20) internal token;
 
+  mapping(address => bool) internal isLockableToken;
+
   mapping(address => uint256) public totalLocked;
 
   mapping(address => uint256) public totalScore;
@@ -51,15 +53,11 @@ import "ABDKMathQuad.sol";
 
   TokenInterface SWN;
 
-  TokenInterface STABLE;
-
   address LGE;
 
     constructor() {
         address token_SWN = address(0x0);
-        address token_STABLE = address(0x0);
         SWN = TokenInterface(token_SWN);
-        STABLE = TokenInterface(token_STABLE);
         LGE = address(0x0);
         rewardTax = 8;
         timeLockingPeriods = [0, 2592000, 7776000, 15552000, 31104000];
@@ -71,17 +69,17 @@ import "ABDKMathQuad.sol";
 
   function addLockablePair(address _pair, uint256 _blockReward)
   public
+  onlyOwner
   {
-    (bool _isLockable) = isLockable(_pair);
-    if(!_isLockable){
-      lockableToken.push(_pair);
-      token[_pair] = IERC20(_pair);
-      blockReward[_pair] = _blockReward;
-    }
+    require(!isLockableToken[_pair], "Token already added!");
+    lockableToken.push(_pair);
+    isLockableToken[_pair] = true;
+    token[_pair] = IERC20(_pair);
+    blockReward[_pair] = _blockReward;
   }
 
   function adjustBlockReward(address _pair, uint256 _blockReward)
-  public
+  external
   onlyOwner
   {
     require(isLockable(_pair), "This token has not been added!");
@@ -90,15 +88,15 @@ import "ABDKMathQuad.sol";
   }
 
   function adjustRewardTax(uint256 _rewardTax)
-  public
+  external
   onlyOwner
   {
-    require(0 <= _rewardTax && rewardTax < 10, "Enter tax between 0-10%!");
+    require(rewardTax < 10, "Enter tax between 0-10%!");
     rewardTax = _rewardTax;
   }
 
   function removeRewardEmissions()
-  public
+  external
   onlyOwner
   {
     for (uint256 s = 0; s < lockableToken.length; s += 1){
@@ -113,10 +111,7 @@ import "ABDKMathQuad.sol";
   view
   returns(bool)
   {
-    for (uint256 s = 0; s < lockableToken.length; s += 1){
-      if (_token == lockableToken[s]) return (true);
-    }
-    return (false);
+    return (isLockableToken[_token]);
   }
 
   function isLocker(address _pair, address _address)
@@ -129,7 +124,7 @@ import "ABDKMathQuad.sol";
   }
 
   function lockPermanent(address _token, uint256 _amount)
-  public
+  external
   {
     require(isLockable(_token), "Token not accepted!");
     require(token[_token].transferFrom(msg.sender, address(this), _amount), "No funds received!");
@@ -137,7 +132,7 @@ import "ABDKMathQuad.sol";
   }
 
   function lockTimed(address _token, uint256 _amount, uint256 _time)
-  public
+  external
   {
     require(isLockable(_token), "Token not accepted!");
     bool validTimePeriod = false;
@@ -191,7 +186,7 @@ import "ABDKMathQuad.sol";
   }
 
   function pushPermanentLockFromLGE(address _liquidityToken, uint256 _totalLiquidityTokenAmount, address[] memory investors, uint256[] memory tokenAmount)
-  public
+  external
   {
     require(msg.sender == LGE, "Function can only be called by the Liquidity Generation Event contract!");
     addLockablePair(_liquidityToken, 1000000000000000000); // Token addresses and block reward
@@ -216,7 +211,7 @@ import "ABDKMathQuad.sol";
 
   }
 
-    function pushLGEAddress(address _LGE) public onlyOwner {
+    function pushLGEAddress(address _LGE) external onlyOwner {
       LGE = _LGE;
     }
 
@@ -268,7 +263,7 @@ import "ABDKMathQuad.sol";
   * @notice A method to allow a stakeholder to withdraw his rewards.
   */
   function withdrawReward(address _token)
-  public
+  external
   {
     require(lockTimedAmount[_token][msg.sender] > 0 || lockPermanentAmount[_token][msg.sender] > 0, "No active stake found!");
 
@@ -285,7 +280,7 @@ import "ABDKMathQuad.sol";
   }
 
   function treasuryReward(address _address, uint256 _amount)
-  public
+  external
   onlyOwner
   {
     require(_amount <= treasury, "Amount exceeds balance!");
@@ -293,7 +288,7 @@ import "ABDKMathQuad.sol";
   }
 
   function withdrawLiquidity(address _token, uint256 _amount)
-  public
+  external
   {
     require(lockTime[_token][msg.sender] < block.timestamp, "Lock time not over!");
     require(_amount <= lockTimedAmount[_token][msg.sender], "Amount exceeds balance!");
@@ -315,7 +310,7 @@ import "ABDKMathQuad.sol";
 
 interface TokenInterface {
     function mint(address to, uint256 amount) external;
-    function transfer(address to, uint256 amount) external;
-    function transferFrom(address from, address to, uint256 amount) external;
+    function transfer(address recipient, uint256 amount) external returns (bool);
+    function transferFrom(address sender, address recipient, uint256 amount) external returns (bool);
     function balanceOf(address account) external view returns (uint256);
 }

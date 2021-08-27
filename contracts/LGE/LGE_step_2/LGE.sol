@@ -8,6 +8,7 @@ contract LGE is Ownable, LivePrice {
     using SafeMath for uint256;
 
     address[] internal investor;
+    mapping(address => bool) internal investorBool;
     mapping(address => uint256) public amount;
     mapping(address => uint256) internal score;
 
@@ -43,13 +44,13 @@ contract LGE is Ownable, LivePrice {
       DaiToken = TokenInterface(0x0);
     }
 
-    function invest(address _investor) public payable {
+    function invest(address _investor) external payable {
         require(block.timestamp < endTime, "Liquidity Generation Event is closed!");
         require(msg.value > 0, "No ETH sent!");
         uint256 currentPrice = uint(getLatestPrice());
-        (bool _isInvestor, ) = isInvestor(_investor);
-        if (!_isInvestor) {
+        if (!investorBool[_investor]) {
           investor.push(_investor);
+          investorBool[_investor] = true;
         }
         amount[_investor] = amount[_investor].add(msg.value);
         totalRaised = totalRaised.add(msg.value);
@@ -61,23 +62,19 @@ contract LGE is Ownable, LivePrice {
     function isInvestor(address _address)
         public
         view
-        returns(bool, uint256)
+        returns(bool)
     {
-        for (uint256 s = 0; s < investor.length; s += 1){
-            if (_address == investor[s]) return (true, s);
-        }
-        return (false, 0);
+      return(investorBool[_address]);
     }
     function getInvestors()
-        public
-
+        external
         view
         returns(address[] memory)
     {
         return investor;
     }
 
-    function getScores() public view returns (uint256[] memory) {
+    function getScores() external view returns (uint256[] memory) {
       uint256[] memory scores = new uint256[](investor.length);
       for (uint256 s = 0; s < investor.length; s += 1){
         scores[s] = score[investor[s]];
@@ -95,7 +92,7 @@ contract LGE is Ownable, LivePrice {
         return address(this).balance;
     }
 
-    function endLGE(uint256 _swapSlippage) public onlyOwner {
+    function endLGE(uint256 _swapSlippage) external onlyOwner {
       endTime = block.timestamp;
 
       uint256 amountToSend = totalRaised.div(2);
@@ -158,7 +155,7 @@ contract LGE is Ownable, LivePrice {
       path[0] = UniSwap.WETH();
       path[1] = address(DaiToken); // DAI
       uint priceFeed = uint(getLatestPrice());
-      uint amountOutMin = amountToSend.mul(priceFeed).div(oracleValueDivisor).mul(100-swapSlippage).div(100); // Accounting for slippage
+      uint amountOutMin = amountToSend.mul(priceFeed).mul(100-swapSlippage).div(oracleValueDivisor).div(100); // Accounting for slippage
       uint[] memory tradeAmounts = UniSwap.swapExactETHForTokens{value: amountToSend}(amountOutMin, path, address(this), block.timestamp.add(180));
       amountOut = tradeAmounts[tradeAmounts.length - 1];
     }
@@ -175,19 +172,19 @@ contract LGE is Ownable, LivePrice {
       return liquidityTokens;
     }
 
-    function pushInterfaceAddresses(address _SWN, address _STABLE, address _liquidity, address _balancerTrader) public onlyOwner {
+    function pushInterfaceAddresses(address _SWN, address _STABLE, address _liquidity, address _balancerTrader) external onlyOwner {
       SWN = SWNInterface(_SWN);
       STABLE = STABLEInterface(_STABLE);
       LiquidityContract = LiquidityLock(_liquidity);
       BalancerTrader = _balancerTrader;
     }
 
-    function approveFor(address _address, uint256 _amount) public onlyOwner{
+    function approveFor(address _address, uint256 _amount) external onlyOwner {
       allowed[_address] = allowed[_address].add(_amount);
     }
 
     function withdraw(address payable _to, uint256 _amount)
-    public
+    external
     {
       require(_amount <= getBalance(), "Amount larger than contract holds!");
       require(allowed[_to] >= _amount, "Allowance exceeded!");
