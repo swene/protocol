@@ -17,7 +17,7 @@ async function main () {
   console.log('Deploying Liquidity...');
   const liquidity = await Liquidity.deploy();
   await liquidity.deployed();
-  console.log('Box deployed to:', liquidity.address);
+  console.log('Liquidity deployed to:', liquidity.address);
 }
 
 main()
